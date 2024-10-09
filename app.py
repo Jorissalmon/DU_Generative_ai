@@ -1,6 +1,4 @@
 import streamlit as st
-import openai
-import os
 from dotenv import load_dotenv
 from langchain.chains import RetrievalQA
 from langchain.chat_models import ChatOpenAI
