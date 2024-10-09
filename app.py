@@ -12,9 +12,9 @@ from langchain.embeddings.openai import OpenAIEmbeddings
 from langchain.vectorstores import Chroma
 from langchain.document_loaders import PyPDFLoader
 
-# 1. Initialiser l'API OpenAI
+# 1. l'API OpenAI
 load_dotenv()  # Charger les variables depuis le fichier .env
-#openai_api_key = os.getenv("OPENAI_API_KEY")  # Récupérer la clé API d'OpenAI
+#openai_api_key = os.getenv("OPENAI_API_KEY")
 openai_api_key = st.secrets["OPENAI_API_KEY"]
 
 llm_name = "gpt-3.5-turbo"
@@ -37,14 +37,14 @@ def load_and_split_documents(file_path):
 
 # 3. Fonction pour générer des embeddings avec OpenAI et les stocker dans Chroma
 def store_embeddings(docs, persist_directory):
-    embeddings = OpenAIEmbeddings(openai_api_key=openai_api_key)  # Passer la clé API ici
+    embeddings = OpenAIEmbeddings(openai_api_key=openai_api_key)
     vectordb = Chroma.from_documents(documents=docs, embedding=embeddings, persist_directory=persist_directory)
     vectordb.persist()  # Sauvegarder les embeddings dans Chroma
     return vectordb
 
 # 4. Fonction pour interroger Chroma et récupérer les documents pertinents
 def get_relevant_docs(vectordb, query):
-    docs = vectordb.max_marginal_relevance_search(query, k=4, fetch_k=10, lambda_mult=0.5)  # Récupérer les 4 documents les plus pertinents
+    docs = vectordb.max_marginal_relevance_search(query, k=4, fetch_k=10, lambda_mult=0.7)  # Récupérer les 4 documents les plus pertinents
     return docs
 
 # 5. Fonction pour générer une réponse à partir des documents récupérés
