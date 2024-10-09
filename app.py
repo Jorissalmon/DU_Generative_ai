@@ -14,7 +14,7 @@ from langchain_community.document_loaders import PyPDFLoader
 # 1. Initialiser l'API OpenAI
 load_dotenv()  # Charger les variables depuis le fichier .env
 #openai_api_key = os.getenv("OPENAI_API_KEY")  # Récupérer la clé API d'OpenAI
-openai.api_key = st.secrets["OPENAI_API_KEY"]
+openai_api_key = st.secrets["OPENAI_API_KEY"]
 
 llm_name = "gpt-3.5-turbo"
 llm = ChatOpenAI(model_name=llm_name, temperature=0)
@@ -52,13 +52,13 @@ def generate_response(query, qa, relevant_docs):
     # On construit une chaîne avec les documents pertinents pour donner un contexte au modèle
     docs_content = "\n\n".join([doc.page_content for doc in relevant_docs])
 
-    template = """Use the following pieces of context to answer the question in a detailed manner. 
-    If you don't know the answer, just say that you don't know, don't try to make up an answer. 
-    Provide as much relevant information as possible based on the context. 
+    template = """Utilisez les éléments de contexte suivants pour répondre à la question de manière détaillée. 
+    Si vous ne connaissez pas la réponse, dites simplement que vous ne savez pas, n'essayez pas d'inventer une réponse. 
+    Fournissez autant d'informations pertinentes que possible en fonction du contexte. 
     {docs_content}
 
     Question: {query}
-    Detailed Answer:"""
+    Detaillez la réponse:"""
 
     # Formater le template avec les documents et la question
     prompt = template.format(docs_content=docs_content, query=query)
