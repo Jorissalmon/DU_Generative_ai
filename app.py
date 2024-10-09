@@ -14,7 +14,7 @@ from langchain_community.document_loaders import PyPDFLoader
 # 1. Initialiser l'API OpenAI
 load_dotenv()  # Charger les variables depuis le fichier .env
 #openai_api_key = os.getenv("OPENAI_API_KEY")  # Récupérer la clé API d'OpenAI
-openai.api_key = st.secrets["openai_api_key"]
+openai.api_key = st.secrets["OPENAI_API_KEY"]
 
 llm_name = "gpt-3.5-turbo"
 llm = ChatOpenAI(model_name=llm_name, temperature=0)
