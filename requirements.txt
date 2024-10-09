@@ -3,3 +3,4 @@ openai
 chromadb
 langchain
 tiktoken
+langchain-community
