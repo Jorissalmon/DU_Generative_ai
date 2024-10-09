@@ -8,9 +8,9 @@ from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain.memory import ConversationBufferMemory
 from langchain.chains import ConversationalRetrievalChain
 from langchain.prompts import PromptTemplate
-from langchain_community.embeddings import OpenAIEmbeddings
-from langchain_community.vectorstores import Chroma
-from langchain_community.document_loaders import PyPDFLoader
+from langchain.embeddings.openai import OpenAIEmbeddings
+from langchain.vectorstores import Chroma
+from langchain.document_loaders import PyPDFLoader
 # 1. Initialiser l'API OpenAI
 load_dotenv()  # Charger les variables depuis le fichier .env
 #openai_api_key = os.getenv("OPENAI_API_KEY")  # Récupérer la clé API d'OpenAI
