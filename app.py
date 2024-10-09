@@ -11,6 +11,7 @@ from langchain.prompts import PromptTemplate
 from langchain.embeddings.openai import OpenAIEmbeddings
 from langchain.vectorstores import Chroma
 from langchain.document_loaders import PyPDFLoader
+
 # 1. Initialiser l'API OpenAI
 load_dotenv()  # Charger les variables depuis le fichier .env
 #openai_api_key = os.getenv("OPENAI_API_KEY")  # Récupérer la clé API d'OpenAI
