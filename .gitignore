@@ -1,0 +1,7 @@
+.env
+secrets.toml
+/.streamlit
+/env
+/chroma_db
+/rendu
+.devcontainer
