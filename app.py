@@ -435,6 +435,7 @@ if st.button("Envoyer") and (user_question and st.session_state.get('last_user_q
         {relevant_docs}
 
         Question : {user_question}
+        Repondre en français
         """)
 
         st.write("### 🤖 Réponse")
