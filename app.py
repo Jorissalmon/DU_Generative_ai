@@ -72,7 +72,7 @@ def select_random_documents(docs, num_docs=50):
     
     return selected_docs
 
-# 5. Fonction pour générer une réponse à partir des documents récupérés et de la question
+# Fonction pour générer une réponse à partir des documents récupérés et de la question
 def generate_response(qa,prompt_template):
     # Passer le prompt formaté à la chaîne de question-réponse (qa)
     response = qa({"question": prompt_template})
@@ -409,7 +409,7 @@ if generer_cours==True:
         # return_source_documents=True
     )
 
-# Champ de texte pour entrer une question
+####################### Champ de texte pour entrer une question
 user_question = st.text_input("Poses ta question")
 
 if st.button("Envoyer") and (user_question and st.session_state.get('last_user_question') != user_question):
