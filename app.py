@@ -427,3 +427,29 @@ if st.button("Envoyer") and (user_question and st.session_state.get('last_user_q
         st.write("### 🤖 Réponse")
         st.write(response)
 
+#######################TESTS
+from elevenlabs import play
+from elevenlabs.client import ElevenLabs
+if st.sidebar.button("Générer le podcast TEST"):
+    podcast_content="Salut, moi c'est Joris, on se retrouve dans un nouveau podcast aujourd'hui"
+
+    client = ElevenLabs(
+    api_key="sk_d4b2c007c5a3e5fdd4807b7e01b9db578e7b66cf31d78a9d",
+    )
+    mp3_output_path = "podcast.mp3" 
+    audio = client.generate(
+    text="Hello! 你好! Hola! नमस्ते! Bonjour! こんにちは! مرحبا! 안녕하세요! Ciao! Cześć! Привіт! வணக்கம்!",
+    voice="Rachel",
+    model="eleven_multilingual_v2"
+    )
+    # Écrire les données audio binaires dans un fichier MP3
+    with open(mp3_output_path, "wb") as f:
+        f.write(audio)
+
+    # Proposer le téléchargement du fichier MP3
+    st.sidebar.download_button(
+        label="Télécharger le podcast en MP3",
+        data=open(mp3_output_path, "rb").read(),
+        file_name="podcast.mp3",
+        mime="audio/mpeg"
+    )
