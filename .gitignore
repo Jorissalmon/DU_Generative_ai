@@ -5,3 +5,4 @@ secrets.toml
 /chroma_db
 /rendu
 .devcontainer
+Test_voice.py

@@ -3,6 +3,7 @@ import random
 import os
 import markdown2
 import markdown
+import faiss
 from langchain.docstore.document import Document
 from PyPDF2 import PdfReader
 from dotenv import load_dotenv
@@ -17,10 +18,12 @@ from langchain.document_loaders import PyPDFLoader
 from langchain.prompts import PromptTemplate
 from fpdf import FPDF
 from openai import OpenAI
+from langchain.vectorstores import FAISS
 
 # 1. Chargement de l'API OpenAI
 load_dotenv()
 openai_api_key = st.secrets["OPENAI_API_KEY"]
+eleven_labs_api_key=st.secrets["ELEVENLABS_API_KEY"]
 client = OpenAI(
     api_key=openai_api_key,
 )
@@ -41,10 +44,13 @@ def load_and_split_documents(file_path):
     return docs
 
 # Fonction pour générer des embeddings avec OpenAI et les stocker dans Chroma
-def store_embeddings(docs, persist_directory):
+def store_embeddings(docs):
     embeddings = OpenAIEmbeddings(openai_api_key=openai_api_key)
-    vectordb = Chroma.from_documents(documents=docs, embedding=embeddings, persist_directory=persist_directory)
-    vectordb.persist()  # Sauvegarder les embeddings dans Chroma
+    # Stockage des embeddings dans FAISS
+    vectordb = FAISS.from_documents(docs, embeddings)
+    
+    # (Optionnel) Sauvegarder le vectordb FAISS sur disque
+    faiss.write_index(vectordb.index, "faiss_index")
     return vectordb
 
 # Fonction pour interroger Chroma et récupérer les documents pertinents pour le cours
@@ -254,7 +260,7 @@ if uploaded_files and isinstance(uploaded_files, list) and len(uploaded_files) >
     st.session_state.all_docs = all_docs
     # Stocker les embeddings dans Chroma
     if all_docs:  # Vérifie que nous avons des documents à stocker
-        vectordb = store_embeddings(all_docs, persist_directory)
+        vectordb = store_embeddings(all_docs)
         st.write("Documents chargés et stockés avec succès.")
     else:
         st.error("Aucun document valide trouvé pour le stockage.")
@@ -349,11 +355,18 @@ if st.sidebar.button("Générer une fiche de révision"):
 if st.sidebar.button("Générer le podcast"):
     if 'response' in st.session_state and st.session_state.response:
         podcast_prompt_template = f"""
-        Utilisez les documents suivants pour rédiger un podcast, résumant les points clés essentiels du cours avec des exemples. Le podcast doit être sympa à écouter
-        Voici les informations du cours, n'hesite pas à en rajouter : {st.session_state.relevant_docs}
-        Voici le plan du cours : {st.session_state.sujet}
-        Je veux que tu rédiges un podcast de 150 mots
-        """
+            Vous allez rédiger le script d’un podcast captivant et accessible basé sur les documents suivants. L'objectif est de transmettre les points essentiels du cours de manière agréable et dynamique. N'hésitez pas à utiliser des exemples pertinents pour illustrer les concepts abordés.
+
+            Voici les informations clés du cours : {st.session_state.relevant_docs}
+            Voici le plan du cours à suivre : {st.session_state.sujet}
+
+            Le podcast doit être structuré de façon à capter l'attention de l'auditeur dès le début, puis à expliquer chaque point de manière claire et détaillée. Utilisez un ton amical et engageant, et ponctuez la narration avec des anecdotes ou des exemples concrets pour aider à mieux comprendre les idées. Concluez par un résumé efficace des idées principales, en laissant l'auditeur avec des points mémorables à retenir.
+            
+            Structure suggérée :
+            1. Introduction : Présentation du sujet et de l’objectif du podcast.
+            2. Développement : Décrivez chaque point clé du cours en détail, avec des exemples concrets et des anecdotes.
+            3. Conclusion : Résumez les idées principales et terminez sur une note encourageante pour l'auditeur.
+            """
         #Interrogation LLM
         podcast = client.chat.completions.create(
             messages=[
@@ -427,29 +440,3 @@ if st.button("Envoyer") and (user_question and st.session_state.get('last_user_q
         st.write("### 🤖 Réponse")
         st.write(response)
 
-#######################TESTS
-from elevenlabs import play
-from elevenlabs.client import ElevenLabs
-if st.sidebar.button("Générer le podcast TEST"):
-    podcast_content="Salut, moi c'est Joris, on se retrouve dans un nouveau podcast aujourd'hui"
-
-    client = ElevenLabs(
-    api_key="sk_d4b2c007c5a3e5fdd4807b7e01b9db578e7b66cf31d78a9d",
-    )
-    mp3_output_path = "podcast.mp3" 
-    audio = client.generate(
-    text="Hello! 你好! Hola! नमस्ते! Bonjour! こんにちは! مرحبا! 안녕하세요! Ciao! Cześć! Привіт! வணக்கம்!",
-    voice="Rachel",
-    model="eleven_multilingual_v2"
-    )
-    # Écrire les données audio binaires dans un fichier MP3
-    with open(mp3_output_path, "wb") as f:
-        f.write(audio)
-
-    # Proposer le téléchargement du fichier MP3
-    st.sidebar.download_button(
-        label="Télécharger le podcast en MP3",
-        data=open(mp3_output_path, "rb").read(),
-        file_name="podcast.mp3",
-        mime="audio/mpeg"
-    )
