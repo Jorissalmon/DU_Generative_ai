@@ -3,6 +3,5 @@ secrets.toml
 /.streamlit
 /env
 /chroma_db
-/rendu
 .devcontainer
 Test_voice.py
