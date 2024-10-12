@@ -400,18 +400,24 @@ if st.sidebar.button("Générer le podcast"):
 ################################## Interface utilisateur pour poser des questions
 
 st.write("## Poses des questions sur le cours")
-if generer_cours==True:
-    ### Initilisatin du modèle pour les questions/réponses
-    #Utilisation de langchain, pour un model avec historique
-    llm_name = "gpt-3.5-turbo"
-    llm = ChatOpenAI(model_name=llm_name, temperature=0.2, max_tokens=1000)
 
-    #Initialisation de la mémoire
-    memory = ConversationBufferMemory(
-        memory_key="chat_history",
-        return_messages=True
-    )
-    # Initialisation de l'historique pour le llm de question réponse.
+### Initilisatin du modèle pour les questions/réponses
+#Utilisation de langchain, pour un model avec historique
+llm_name = "gpt-3.5-turbo"
+llm = ChatOpenAI(model_name=llm_name, temperature=0.2, max_tokens=1000)
+
+#Initialisation de la mémoire
+memory = ConversationBufferMemory(
+    memory_key="chat_history",
+    return_messages=True
+)
+
+
+####################### Champ de texte pour entrer une question
+user_question = st.text_input("Poses ta question")
+
+if st.button("Envoyer") and (user_question and st.session_state.get('last_user_question') != user_question):
+        # Initialisation de l'historique pour le llm de question réponse.
     retriever = vectordb.as_retriever()
     qa = ConversationalRetrievalChain.from_llm(
         llm,
@@ -420,11 +426,6 @@ if generer_cours==True:
         chain_type="refine",  # Changez ceci selon vos besoins: 'stuff', 'map_reduce', 'refine'
         # return_source_documents=True
     )
-
-####################### Champ de texte pour entrer une question
-user_question = st.text_input("Poses ta question")
-
-if st.button("Envoyer") and (user_question and st.session_state.get('last_user_question') != user_question):
     if user_question and vectordb:
         relevant_docs = get_relevant_docs_chat(vectordb, user_question, len(all_docs))
         response = generate_response(qa, f"""
