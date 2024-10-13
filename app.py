@@ -4,6 +4,7 @@ import os
 import markdown2
 import markdown
 import faiss
+import whisper
 from langchain.docstore.document import Document
 from PyPDF2 import PdfReader
 from dotenv import load_dotenv
@@ -12,12 +13,16 @@ from langchain.chat_models import ChatOpenAI
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain.memory import ConversationBufferMemory
 from langchain.chains import ConversationalRetrievalChain
+from langchain.text_splitter import TokenTextSplitter
 from langchain.embeddings.openai import OpenAIEmbeddings
 from langchain.document_loaders import PyPDFLoader
 from langchain.prompts import PromptTemplate
 from fpdf import FPDF
 from openai import OpenAI
 from langchain.vectorstores import FAISS
+from youtube_transcript_api import YouTubeTranscriptApi
+
+os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE" #Erreur de librairie
 
 # 1. Chargement de l'API OpenAI
 load_dotenv()
@@ -32,29 +37,55 @@ client = OpenAI(
 ###########Fonctions##############
 ##################################
 
-# Fonction pour charger et splitter les documents
+###########################################Fonctions de loading de fichiers et split
+# Fonction pour traiter les fichiers texte
+def load_txt_file(file):
+    return file.read().decode("utf-8")
+
+# Fonction pour récupérer la transcription d'un fichier MP3
+def transcribe_audio(file_path):
+    model = whisper.load_model("base")
+    result = model.transcribe(file_path)
+    return result["text"]
+
+# Fonction pour récupérer la transcription d'une vidéo YouTube
+def get_youtube_transcription(youtube_url):
+    video_id = youtube_url.split("v=")[-1]  # Extraire l'ID de la vidéo à partir de l'URL
+    transcript = YouTubeTranscriptApi.get_transcript(video_id, languages=['fr'])
+    return " ".join([t['text'] for t in transcript])
+
+# Fonction pour charger les pdfs et splitter les documents
 def load_and_split_documents(file_path):
     loader = PyPDFLoader(file_path)# Chargement du fichier
     documents = loader.load()
     
     # Splitter les documents en petits morceaux
-    text_splitter = RecursiveCharacterTextSplitter(chunk_size=100, chunk_overlap=20)#Splits de 500 caractères au maximum, avec un retour de 50 caractères à chaque fois
+    text_splitter = TokenTextSplitter(chunk_size=100, chunk_overlap=10)#Splits de 100 caractères au maximum, avec un retour de 10 caractères à chaque fois
     docs = text_splitter.split_documents(documents)
+
+    #Vérification des documents chargés
+    print("DOCUMENTS CHARGES:")
+    for i, doc in enumerate(docs):
+        print(f"Document {i+1}:")
+        print(doc.page_content)
     return docs
 
+###########################################Fonctions de traitement des splits
 # Fonction pour générer des embeddings avec OpenAI et les stocker dans Chroma
 def store_embeddings(docs):
     embeddings = OpenAIEmbeddings(openai_api_key=openai_api_key)
     # Stockage des embeddings dans FAISS
     vectordb = FAISS.from_documents(docs, embeddings)
-    
     # (Optionnel) Sauvegarder le vectordb FAISS sur disque
     faiss.write_index(vectordb.index, "faiss_index")
     return vectordb
 
 # Fonction pour interroger Chroma et récupérer les documents pertinents pour le cours
 def get_relevant_docs_cours(vectordb, query, len_k):
-    docs = vectordb.max_marginal_relevance_search(query, k=10, fetch_k=len_k, lambda_mult=0.7)
+    if len_k*0.2>1 :
+        k=len_k*0.2 
+    else : k=1
+    docs = vectordb.max_marginal_relevance_search(query, k=k, fetch_k=len_k, lambda_mult=0.7)
     docs_content = "\n\n".join([doc.page_content for doc in docs])
     print(docs_content)
     return docs_content
@@ -62,11 +93,15 @@ def get_relevant_docs_cours(vectordb, query, len_k):
 # Fonction pour interroger Chroma et récupérer les documents pertinents pour le chat
 # @st.cache_data(show_spinner=False)
 def get_relevant_docs_chat(_vectordb, query, len_k):
-    docs = _vectordb.max_marginal_relevance_search(query, k=10, fetch_k=len_k, lambda_mult=0.3)
+    if len_k*0.2>1 :
+        k=len_k*0.2 
+    else : k=1
+    docs = _vectordb.max_marginal_relevance_search(query, k=k, fetch_k=len_k, lambda_mult=0.3)
     docs_content = "\n\n".join([doc.page_content for doc in docs])
     print(docs_content)
     return docs_content
 
+###########################################Fonctions de réponses
 # Fonction pour sélectionner des documents au hasard
 def select_random_documents(docs, num_docs=50):
     selected_docs = [docs[0]] if len(docs) > 0 else []
@@ -218,8 +253,13 @@ div.stDownloadButton > button:hover {
 """, unsafe_allow_html=True)
 
 # Uploader de plusieurs documents
-uploaded_files = st.file_uploader("Uploader plusieurs documents", type=["pdf"], accept_multiple_files=True)
-
+uploaded_files = st.file_uploader(
+    "Uploader plusieurs documents (PDF, TXT, MP3)", 
+    type=["pdf", "txt", "mp3"], 
+    accept_multiple_files=True
+)
+# Demander un lien YouTube si nécessaire
+youtube_url = st.text_input("Entrer un lien YouTube pour récupérer la transcription (optionnel)")
 
 #################### Initialisation ############################
 # Initialisation de valeurs dans le cache
@@ -229,40 +269,137 @@ if 'sujet' not in st.session_state:
     st.session_state.sujet = None 
 if 'relevant_docs' not in st.session_state:
     st.session_state.relevant_docs = None 
-    
-# Stocker les documents et les embeddings
-persist_directory = "chroma_db"
+if 'vectordb' not in st.session_state:
+    st.session_state.vectordb = None 
+
+###############################################################    
+###################### Introduction et stockage des documents et les embeddings
+###############################################################
+# persist_directory = "chroma_db"
 vectordb = None
 
 generer_cours=False
 
-if uploaded_files and isinstance(uploaded_files, list) and len(uploaded_files) > 0 and ('relevant_docs' not in st.session_state or st.session_state.relevant_docs is None):
-    #Réinitialisation de la variable 
-    generer_cours=False
 
+if st.button("Charger et traiter les fichiers"):
+    if uploaded_files and isinstance(uploaded_files, list) and len(uploaded_files) > 0 or youtube_url is not None:
 
-    # Liste pour stocker tous les documents chargés
-    all_docs = []
+        all_docs = []
 
-    for uploaded_file in uploaded_files:
-        # Charger et splitter chaque document PDF
-        file_path = os.path.join("temp_uploaded_file.pdf")
-        with open(file_path, "wb") as f:
-            f.write(uploaded_file.getbuffer())
+        # Parcourir chaque fichier téléchargé
+        for uploaded_file in uploaded_files:
+            file_extension = os.path.splitext(uploaded_file.name)[1].lower()
 
-        # Splitter les documents et ajouter les morceaux à la liste
-        docs = load_and_split_documents(file_path)
-        all_docs.extend(docs)  # Ajouter les morceaux à la liste principale
+            if file_extension == ".pdf":
+                # Charger et splitter chaque document PDF
+                file_path = os.path.join("temp_uploaded_file.pdf")
+                with open(file_path, "wb") as f:
+                    f.write(uploaded_file.getbuffer())
 
-    st.write(f"Nombre total de morceaux de documents chargés : {len(all_docs)}")
-    #Enregistrement de la variable dans la session
-    st.session_state.all_docs = all_docs
-    # Stocker les embeddings dans Chroma
-    if all_docs:  # Vérifie que nous avons des documents à stocker
-        vectordb = store_embeddings(all_docs)
-        st.write("Documents chargés et stockés avec succès.")
+                # Splitter les documents
+                docs = load_and_split_documents(file_path)
+                all_docs.extend(docs)
+
+            elif file_extension == ".txt":
+                # Charger le fichier texte
+                text = load_txt_file(uploaded_file)
+                docs = [Document(page_content=text)]
+                all_docs.extend(docs)
+
+            elif file_extension == ".mp3":
+                # Transcrire le fichier audio MP3
+                file_path = os.path.join("temp_uploaded_audio.mp3")
+                with open(file_path, "wb") as f:
+                    f.write(uploaded_file.getbuffer())
+
+                transcription = transcribe_audio(file_path)
+                docs = [Document(page_content=transcription)]
+                print(f"Voilà la TRANSCRIPTION MP3 : {docs}")
+                all_docs.extend(docs)
+        if youtube_url:
+            st.session_state.youtube_url = youtube_url
+            try:
+                transcription = get_youtube_transcription(youtube_url)
+                docs = [Document(page_content=transcription)]
+                print(f"Voilà la TRANSCRIPTION YOUTUBE : {docs}")
+                all_docs.extend(docs)
+                st.write("Transcription YouTube récupérée avec succès.")
+            except Exception as e:
+                st.error(f"Erreur lors de la récupération de la transcription YouTube : {e}")
+
+        # Afficher le nombre de morceaux de documents chargés
+        st.write(f"Nombre total de morceaux de documents chargés : {len(all_docs)}")
+        st.session_state.all_docs = all_docs
+
+        # Stocker les embeddings dans Chroma
+        if all_docs:
+            vectordb = store_embeddings(all_docs)
+            # embeddings = vectordb.index.reconstruct_n(0, vectordb.index.ntotal)
+            # print(embeddings[:5]) 
+            if vectordb is None:
+                st.error("Erreur lors de l'initialisation de vectordb.")
+            else:
+                st.session_state.vectordb = vectordb
+            ### Initilisatin du modèle pour les questions/réponses
+            #Utilisation de langchain, pour un model avec historique
+            llm_name = "gpt-3.5-turbo"
+            llm = ChatOpenAI(model_name=llm_name, temperature=0.2, max_tokens=1000)
+
+            #Initialisation de la mémoire
+            memory = ConversationBufferMemory(
+                memory_key="chat_history",
+                return_messages=True
+            )
+
+            # Initialisation de l'historique pour le llm de question réponse.
+            retriever = vectordb.as_retriever()
+            qa = ConversationalRetrievalChain.from_llm(
+                llm,
+                retriever=retriever,
+                memory=memory,
+                chain_type="refine",  # Changez ceci selon vos besoins: 'stuff', 'map_reduce', 'refine'
+                # return_source_documents=True
+            )
+            st.session_state.qa = qa
+            st.write("Documents chargés et stockés avec succès.")
+        else:
+            st.error("Aucun document valide trouvé pour le stockage.")
     else:
-        st.error("Aucun document valide trouvé pour le stockage.")
+        st.error("Veuillez télécharger des fichiers.")
+
+################################## 
+################################## Interface utilisateur pour poser des questions
+
+st.write("## Poses des questions sur le cours")
+
+####################### Champ de texte pour entrer une question
+user_question = st.text_input("Poses ta question")
+
+if st.button("Envoyer"):
+    # Vérification des fichiers uploadés ou de l'URL YouTube
+    if (uploaded_files is not None and len(uploaded_files) > 0) or \
+       ('youtube_url' in st.session_state and st.session_state['youtube_url'] is not None):
+
+        # Vérification de la question de l'utilisateur et de la base de données vectorielle
+        if user_question and st.session_state['vectordb']:
+            relevant_docs = get_relevant_docs_chat(st.session_state['vectordb'], user_question, len(st.session_state['all_docs']))
+            response = generate_response(st.session_state.qa, f"""
+            Répondre à la question posée à l'aide des documents. Vous serez pédagogue et expliquerez de manière claire la réponse à la question.
+            Soyez le plus précis possible.
+            Si vous ne connaissez pas la réponse, dites simplement que vous ne savez pas.    
+            {relevant_docs}
+
+            Question : {user_question}
+            Répondre en français
+            """)
+
+            st.write("### 🤖 Réponse")
+            st.write(response)
+        else:
+            st.error("Veuillez poser une question et vous assurer que la base de données vectorielle est chargée.")
+    else:
+        st.error("Veuillez télécharger des fichiers ou entrer une URL YouTube valide.")
+
 
 ################################ barre latérale pour les boutons de téléchargement #################################################
 
@@ -395,49 +532,3 @@ if st.sidebar.button("Générer le podcast"):
         st.write(podcast_content)
     else :
         st.toast("Veuillez générer le cours pour générer un podcast.", icon="ℹ️")
-
-################################## 
-################################## Interface utilisateur pour poser des questions
-
-st.write("## Poses des questions sur le cours")
-
-### Initilisatin du modèle pour les questions/réponses
-#Utilisation de langchain, pour un model avec historique
-llm_name = "gpt-3.5-turbo"
-llm = ChatOpenAI(model_name=llm_name, temperature=0.2, max_tokens=1000)
-
-#Initialisation de la mémoire
-memory = ConversationBufferMemory(
-    memory_key="chat_history",
-    return_messages=True
-)
-
-
-####################### Champ de texte pour entrer une question
-user_question = st.text_input("Poses ta question")
-
-if st.button("Envoyer") and (user_question and st.session_state.get('last_user_question') != user_question):
-        # Initialisation de l'historique pour le llm de question réponse.
-    retriever = vectordb.as_retriever()
-    qa = ConversationalRetrievalChain.from_llm(
-        llm,
-        retriever=retriever,
-        memory=memory,
-        chain_type="refine",  # Changez ceci selon vos besoins: 'stuff', 'map_reduce', 'refine'
-        # return_source_documents=True
-    )
-    if user_question and vectordb:
-        relevant_docs = get_relevant_docs_chat(vectordb, user_question, len(all_docs))
-        response = generate_response(qa, f"""
-        Répondre à la question posé à l'aide des documents. Vous serez pédagogue en expliquerez de manière claire la réponse à la question.
-        Soyez le plus précis possible.
-        Si vous ne connaissez pas la réponse, dites simplement que vous ne savez pas.    
-        {relevant_docs}
-
-        Question : {user_question}
-        Repondre en français
-        """)
-
-        st.write("### 🤖 Réponse")
-        st.write(response)
-
