@@ -407,18 +407,19 @@ st.sidebar.header("Téléchargement")
 
 ##################### Générer le cours
 if st.sidebar.button("Générer le cours"):
-    if uploaded_files and isinstance(uploaded_files, list) and len(uploaded_files) > 0 :
+    if (uploaded_files is not None and len(uploaded_files) > 0) or \
+       ('youtube_url' in st.session_state and st.session_state['youtube_url'] is not None):
         #Pour dire que le cours à déjà été générer
         generer_cours=True
         #Selection de 10 documents parmis les documents dont le 1er
-        docs_randoms = select_random_documents(all_docs, 10)
+        docs_randoms = select_random_documents(st.session_state['all_docs'], 10)
         #Génère le sujet et la structure du plan
         sujet = generate_structure_plan(docs_randoms)
         #Prend les différentes parties du sujet
         subject_parts = sujet.split("##")
         subjet=subject_parts[1]
         #Récupère les principaux documents concernant le sujet
-        relevant_docs = get_relevant_docs_cours(vectordb, subjet, len(all_docs))
+        relevant_docs = get_relevant_docs_cours(st.session_state['vectordb'], subjet, len(st.session_state['all_docs']))
         #Template pour créer le cours
         course_prompt_template = """
         A laide des éléments suivants et du plan, générez un cours structuré. Assurez-vous d'inclure une introduction, des concepts clés, des exemples, et une conclusion bien détaillée.
