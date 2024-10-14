@@ -21,6 +21,8 @@ from fpdf import FPDF
 from openai import OpenAI
 from langchain.vectorstores import FAISS
 from youtube_transcript_api import YouTubeTranscriptApi
+from PIL import Image
+import pytesseract  # Pour faire l'OCR
 
 os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE" #Erreur de librairie
 
@@ -59,6 +61,10 @@ def load_pdf(file_path):
     loader = PyPDFLoader(file_path)  # Chargement du fichier
     documents = loader.load()
     return documents
+
+# Fonction pour extraire le texte des images (OCR)
+def extract_text_from_image(image):
+    return pytesseract.image_to_string(image)
 
 # Fonction pour splitter les documents
 def load_and_split_documents(documents, chunk_size=100, chunk_overlap=10):
@@ -233,15 +239,50 @@ def text_to_mp3_Openai(text, output_path):
 # Configurer la page pour un layout large
 st.set_page_config(layout="wide")
 
+# Ajouter une description du projet en utilisant un style markdown
+st.markdown("""
+# Projet d'un Assistant de Synthèse
+
+Ce projet est une application interactive qui permet aux utilisateurs de télécharger plusieurs types de fichiers (PDF, TXT, MP3, Images, vidéos YouTube) et d'extraire du texte ou des informations utiles à partir de ceux-ci.
+
+## Comment utiliser l'application :
+
+1. **Téléchargez un fichier** : Utilisez l'outil de téléchargement pour importer des fichiers de type PDF, TXT, MP3, images ou entrez l'URL d'une vidéo YouTube pour en extraire la transcription.
+2. **Posez vos questions** :  Vous pouvez poser vos questions sur le cours
+3. **Générer** : Générer un cours, une fiche de révision, ou un podcast
+""", unsafe_allow_html=True)
+
 #Injection de CSS
 st.markdown("""
 <style>
+/* Changer le fond de la page en noir */
+body {
+    background-color: black;
+}
+
+/* Changer la couleur du texte en blanc */
+h1, h2, h3, h4, h5, h6 {
+    color: black;
+}
+div.stButton > button {
+    background-color: #009622;  /* Couleur de fond */
+    color: white;               /* Couleur du texte */
+    font-weight: bold;          /* Texte en gras */
+    font-size: 20px;            /* Augmenter la taille du texte */
+    padding: 15px 30px;         /* Ajouter de l'espace à l'intérieur du bouton */
+    border-radius: 10px;        /* Coins arrondis pour un style moderne */
+}
+div.stButton > button:hover {
+    background-color: #007B33;  /* Couleur légèrement différente au survol */
+    font-size: 22px;            /* Augmenter la taille du texte au survol */
+    font-weight: bold;          /* Toujours en gras */
+}
 div.stDownloadButton > button {
     background-color: #FF6347;
     color: white;
 }
 div.stDownloadButton > button:hover {
-    background-color: #FF4500;
+    background-color: #000000;
     color: white;
 }
 </style>
@@ -264,8 +305,8 @@ div.stDownloadButton > button:hover {
 # <div><img src="https://cdn-icons-png.flaticon.com/512/136/136466.png" alt="MP3" width="80"></div>
 # <div><img src="https://cdn-icons-png.flaticon.com/512/1384/1384060.png" alt="YouTube" width="80"></div>
 # ''', unsafe_allow_html=True)
+# st.markdown('</div>', unsafe_allow_html=True)
 
-st.markdown('</div>', unsafe_allow_html=True)
 ################################## 
 ###########Streamlit##############
 ##################################
@@ -274,8 +315,8 @@ st.markdown('</div>', unsafe_allow_html=True)
 
 # Uploader de plusieurs documents
 uploaded_files = st.file_uploader(
-    "Uploader plusieurs documents (PDF, TXT, MP3)", 
-    type=["pdf", "txt", "mp3"], 
+    "Uploader plusieurs documents (PDF, TXT, MP3, Images)", 
+    type=["pdf", "txt", "mp3", "jpg", "jpeg", "png"],
     accept_multiple_files=True
 )
 # Demander un lien YouTube si nécessaire
@@ -336,6 +377,17 @@ if st.button("Charger et traiter les fichiers"):
                 docs = [Document(page_content=transcription)]
                 print(f"Voilà la TRANSCRIPTION MP3 : {docs}")
                 all_docs.extend(docs)
+
+            elif file_extension in [".jpg", ".jpeg", ".png"]:
+                # Charger l'image
+                image = Image.open(uploaded_file)
+
+                # Extraire le texte de l'image avec l'OCR
+                extracted_text = extract_text_from_image(image)
+
+                # Ajouter le texte extrait dans les documents pour un traitement ultérieur
+                docs = [Document(page_content=extracted_text)]
+                all_docs.extend(docs)
         if youtube_url:
             st.session_state.youtube_url = youtube_url
             try:
@@ -343,14 +395,12 @@ if st.button("Charger et traiter les fichiers"):
                 docs = [Document(page_content=transcription)]
                 print(f"Voilà la TRANSCRIPTION YOUTUBE : {docs}")
                 all_docs.extend(docs)
-                st.write("Transcription YouTube récupérée avec succès.")
             except Exception as e:
                 st.error(f"Erreur lors de la récupération de la transcription YouTube : {e}")
 
         # Splitter tous les documents collectés (PDF, TXT, MP3, YouTube)
         split_docs = load_and_split_documents(all_docs)
         # Afficher le nombre de morceaux de documents chargés
-        st.write(f"Nombre total de morceaux de documents chargés : {len(split_docs)}")
         st.session_state.all_docs = split_docs
 
         # Stocker les embeddings dans Chroma
@@ -384,20 +434,21 @@ if st.button("Charger et traiter les fichiers"):
                 # return_source_documents=True
             )
             st.session_state.qa = qa
-            st.write("Documents chargés et stockés avec succès.")
+
         else:
             st.error("Aucun document valide trouvé pour le stockage.")
     else:
         st.error("Veuillez télécharger des fichiers.")
-
+    
+    st.write(f"Nombre total de morceaux de documents chargés : {len(st.session_state.all_docs)}")
 ################################## 
 ################################## Interface utilisateur pour poser des questions
 
-st.write("## Poses des questions sur le cours")
+st.write("## Poses ta questions ici")
 
 ####################### Champ de texte pour entrer une question
 
-user_question = st.text_input("Poses ta questioni ici")
+user_question = st.text_input("Ton message ici")
 
 if st.button("Envoyer"):
     # Vérification des fichiers uploadés ou de l'URL YouTube
