@@ -54,21 +54,17 @@ def get_youtube_transcription(youtube_url):
     transcript = YouTubeTranscriptApi.get_transcript(video_id, languages=['fr'])
     return " ".join([t['text'] for t in transcript])
 
-# Fonction pour charger les pdfs et splitter les documents
-def load_and_split_documents(file_path):
-    loader = PyPDFLoader(file_path)# Chargement du fichier
+# Fonction pour charger les pdfs
+def load_pdf(file_path):
+    loader = PyPDFLoader(file_path)  # Chargement du fichier
     documents = loader.load()
-    
-    # Splitter les documents en petits morceaux
-    text_splitter = TokenTextSplitter(chunk_size=100, chunk_overlap=10)#Splits de 100 caractères au maximum, avec un retour de 10 caractères à chaque fois
-    docs = text_splitter.split_documents(documents)
+    return documents
 
-    #Vérification des documents chargés
-    print("DOCUMENTS CHARGES:")
-    for i, doc in enumerate(docs):
-        print(f"Document {i+1}:")
-        print(doc.page_content)
-    return docs
+# Fonction pour splitter les documents
+def load_and_split_documents(documents, chunk_size=100, chunk_overlap=10):
+    text_splitter = TokenTextSplitter(chunk_size=chunk_size, chunk_overlap=chunk_overlap)
+    split_docs = text_splitter.split_documents(documents)
+    return split_docs
 
 ###########################################Fonctions de traitement des splits
 # Fonction pour générer des embeddings avec OpenAI et les stocker dans Chroma
@@ -231,12 +227,11 @@ def text_to_mp3_Openai(text, output_path):
     )
     response.stream_to_file(output_path)
     return output_path
-
 ##################################
-###########Streamlit##############
+###########Style STREAMLIT########
 ##################################
-
-st.title("Ton assitant de cours")
+# Configurer la page pour un layout large
+st.set_page_config(layout="wide")
 
 #Injection de CSS
 st.markdown("""
@@ -251,6 +246,31 @@ div.stDownloadButton > button:hover {
 }
 </style>
 """, unsafe_allow_html=True)
+
+
+# # Section d'introduction avec l'arrière-plan
+# st.markdown('<div class="intro-section">', unsafe_allow_html=True)
+# st.title("Bienvenue au cours")
+# st.subheader("Veuillez uploader vos fichiers : PDF, TXT, MP3, YouTube")
+# st.markdown('</div>', unsafe_allow_html=True)
+
+# # Section pour afficher les types de fichiers
+# st.markdown('<div class="file-icons">', unsafe_allow_html=True)
+
+# # Ajout d'images avec une structure HTML
+# st.markdown('''
+# <div><img src="https://cdn-icons-png.flaticon.com/512/337/337946.png" alt="PDF" width="80"></div>
+# <div><img src="https://cdn-icons-png.flaticon.com/512/104/104647.png" alt="TXT" width="80"></div>
+# <div><img src="https://cdn-icons-png.flaticon.com/512/136/136466.png" alt="MP3" width="80"></div>
+# <div><img src="https://cdn-icons-png.flaticon.com/512/1384/1384060.png" alt="YouTube" width="80"></div>
+# ''', unsafe_allow_html=True)
+
+st.markdown('</div>', unsafe_allow_html=True)
+################################## 
+###########Streamlit##############
+##################################
+
+# st.title("Ton assitant de cours")
 
 # Uploader de plusieurs documents
 uploaded_files = st.file_uploader(
@@ -297,7 +317,7 @@ if st.button("Charger et traiter les fichiers"):
                     f.write(uploaded_file.getbuffer())
 
                 # Splitter les documents
-                docs = load_and_split_documents(file_path)
+                docs = load_pdf(file_path)
                 all_docs.extend(docs)
 
             elif file_extension == ".txt":
@@ -327,13 +347,16 @@ if st.button("Charger et traiter les fichiers"):
             except Exception as e:
                 st.error(f"Erreur lors de la récupération de la transcription YouTube : {e}")
 
+        # Splitter tous les documents collectés (PDF, TXT, MP3, YouTube)
+        split_docs = load_and_split_documents(all_docs)
         # Afficher le nombre de morceaux de documents chargés
-        st.write(f"Nombre total de morceaux de documents chargés : {len(all_docs)}")
-        st.session_state.all_docs = all_docs
+        st.write(f"Nombre total de morceaux de documents chargés : {len(split_docs)}")
+        st.session_state.all_docs = split_docs
 
         # Stocker les embeddings dans Chroma
-        if all_docs:
-            vectordb = store_embeddings(all_docs)
+        if split_docs:
+
+            vectordb = store_embeddings(split_docs)
             # embeddings = vectordb.index.reconstruct_n(0, vectordb.index.ntotal)
             # print(embeddings[:5]) 
             if vectordb is None:
@@ -373,7 +396,8 @@ if st.button("Charger et traiter les fichiers"):
 st.write("## Poses des questions sur le cours")
 
 ####################### Champ de texte pour entrer une question
-user_question = st.text_input("Poses ta question")
+
+user_question = st.text_input("Poses ta questioni ici")
 
 if st.button("Envoyer"):
     # Vérification des fichiers uploadés ou de l'URL YouTube
@@ -399,7 +423,6 @@ if st.button("Envoyer"):
             st.error("Veuillez poser une question et vous assurer que la base de données vectorielle est chargée.")
     else:
         st.error("Veuillez télécharger des fichiers ou entrer une URL YouTube valide.")
-
 
 ################################ barre latérale pour les boutons de téléchargement #################################################
 
