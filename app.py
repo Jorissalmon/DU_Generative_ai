@@ -5,6 +5,8 @@ import markdown2
 import markdown
 import faiss
 import whisper
+import requests
+from io import BytesIO
 from langchain.docstore.document import Document
 from PyPDF2 import PdfReader
 from dotenv import load_dotenv
@@ -23,13 +25,16 @@ from langchain.vectorstores import FAISS
 from youtube_transcript_api import YouTubeTranscriptApi
 from PIL import Image
 import pytesseract  # Pour faire l'OCR
+import assemblyai as aai # Speech to text
 
 os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE" #Erreur de librairie
 
-# 1. Chargement de l'API OpenAI
+# 1. Chargement des API
 load_dotenv()
 openai_api_key = st.secrets["OPENAI_API_KEY"]
-eleven_labs_api_key=st.secrets["ELEVENLABS_API_KEY"]
+# eleven_labs_api_key=st.secrets["ELEVENLABS_API_KEY"]
+assembly_api_key=st.secrets["ASSEMBLY_API_KEY"]
+
 client = OpenAI(
     api_key=openai_api_key,
 )
@@ -46,9 +51,11 @@ def load_txt_file(file):
 
 # Fonction pour récupérer la transcription d'un fichier MP3
 def transcribe_audio(file_path):
-    model = whisper.load_model("base")
-    result = model.transcribe(file_path)
-    return result["text"]
+    aai.settings.api_key = assembly_api_key
+    transcriber = aai.Transcriber()
+    transcript = transcriber.transcribe(file_path)
+    # st.write(transcript.text) Regarder la transcription
+    return transcript.text
 
 # Fonction pour récupérer la transcription d'une vidéo YouTube
 def get_youtube_transcription(youtube_url):
@@ -57,14 +64,33 @@ def get_youtube_transcription(youtube_url):
     return " ".join([t['text'] for t in transcript])
 
 # Fonction pour charger les pdfs
-def load_pdf(file_path):
+def load_pdf(file_path,file_type):
     loader = PyPDFLoader(file_path)  # Chargement du fichier
     documents = loader.load()
     return documents
 
 # Fonction pour extraire le texte des images (OCR)
-def extract_text_from_image(image):
-    return pytesseract.image_to_string(image)
+def extract_text_from_image(image,file_type):
+    url = 'https://api.ocr.space/parse/image'
+    api_key_OCR = st.secrets['OCR_SPACE_API_KEY']
+
+    img_byte_arr = BytesIO()
+    image.save(img_byte_arr, format=file_type)
+    img_byte_arr = img_byte_arr.getvalue()
+    
+    # Envoyer la requête POST à l'API OCR
+    response = requests.post(
+        url,
+        files={'filename': img_byte_arr},
+        data={
+            'apikey': api_key_OCR,
+            'filetype': file_type.lower()
+        }
+    )
+    
+    result = response.json()
+    # st.json(result) Voir les résulats en JSON
+    return result['ParsedResults'][0]['ParsedText']
 
 # Fonction pour splitter les documents
 def load_and_split_documents(documents, chunk_size=100, chunk_overlap=10):
@@ -381,9 +407,9 @@ if st.button("Charger et traiter les fichiers"):
             elif file_extension in [".jpg", ".jpeg", ".png"]:
                 # Charger l'image
                 image = Image.open(uploaded_file)
-
+                file_type = uploaded_file.name.split('.')[-1].upper()
                 # Extraire le texte de l'image avec l'OCR
-                extracted_text = extract_text_from_image(image)
+                extracted_text = extract_text_from_image(image, file_type)
 
                 # Ajouter le texte extrait dans les documents pour un traitement ultérieur
                 docs = [Document(page_content=extracted_text)]
@@ -439,7 +465,7 @@ if st.button("Charger et traiter les fichiers"):
             st.error("Aucun document valide trouvé pour le stockage.")
     else:
         st.error("Veuillez télécharger des fichiers.")
-    
+
     st.write(f"Nombre total de morceaux de documents chargés : {len(st.session_state.all_docs)}")
 ################################## 
 ################################## Interface utilisateur pour poser des questions
