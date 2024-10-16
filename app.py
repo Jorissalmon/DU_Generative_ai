@@ -288,9 +288,11 @@ Ce projet est une application interactive qui permet aux utilisateurs de téléc
 
 ## Comment utiliser l'application :
 
-1. **Téléchargez un fichier** : Utilisez l'outil de téléchargement pour importer des fichiers de type PDF, TXT, MP3, images ou entrez l'URL d'une vidéo YouTube pour en extraire la transcription.
-2. **Posez vos questions** :  Vous pouvez poser vos questions sur le cours
-3. **Générer** : Générer un cours, une fiche de révision, ou un podcast
+
+1. **Insérer ta clé API OPENAI** : que tu peux retrouver [ici](https://www.pythoniaformation.com/blog/articles-sur-python/tutoriels-installation-python/cle-api-openai).
+2. **Téléchargez un fichier** : Utilisez l'outil de téléchargement pour importer des fichiers de type PDF, TXT, MP3, images ou entrez l'URL d'une vidéo YouTube pour en extraire la transcription.
+3. **Posez vos questions** :  Vous pouvez poser vos questions sur le cours
+4. **Générer** : Générer un cours, une fiche de révision, ou un podcast
 """, unsafe_allow_html=True)
 
 # Input pour la clé API
@@ -534,7 +536,7 @@ if st.button("Charger et traiter les fichiers"):
 ################################## 
 ################################## Interface utilisateur pour poser des questions
 
-st.write("## Poses ta questions ici")
+st.write("## Poses tes questions ici")
 
 ####################### Champ de texte pour entrer une question
 
