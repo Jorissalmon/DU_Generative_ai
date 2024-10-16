@@ -64,7 +64,7 @@ def get_youtube_transcription(youtube_url):
     return " ".join([t['text'] for t in transcript])
 
 # Fonction pour charger les pdfs
-def load_pdf(file_path,file_type):
+def load_pdf(file_path):
     loader = PyPDFLoader(file_path)  # Chargement du fichier
     documents = loader.load()
     return documents
@@ -483,6 +483,7 @@ if st.button("Envoyer"):
 
         # Vérification de la question de l'utilisateur et de la base de données vectorielle
         if user_question and st.session_state['vectordb']:
+
             relevant_docs = get_relevant_docs_chat(st.session_state['vectordb'], user_question, len(st.session_state['all_docs']))
             response = generate_response(st.session_state.qa, f"""
             Répondre à la question posée à l'aide des documents. Vous serez pédagogue et expliquerez de manière claire la réponse à la question.
