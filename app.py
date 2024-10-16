@@ -289,7 +289,7 @@ Ce projet est une application interactive qui permet aux utilisateurs de téléc
 ## Comment utiliser l'application :
 
 
-1. **Insérer ta clé API OPENAI** : que tu peux retrouver [ici](https://www.pythoniaformation.com/blog/articles-sur-python/tutoriels-installation-python/cle-api-openai).
+1. **Insérer ta clé API OPENAI** : que tu peux retrouver [ici](https://platform.openai.com/api-keys).
 2. **Téléchargez un fichier** : Utilisez l'outil de téléchargement pour importer des fichiers de type PDF, TXT, MP3, images ou entrez l'URL d'une vidéo YouTube pour en extraire la transcription.
 3. **Posez vos questions** :  Vous pouvez poser vos questions sur le cours
 4. **Générer** : Générer un cours, une fiche de révision, ou un podcast
