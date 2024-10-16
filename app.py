@@ -27,6 +27,7 @@ from youtube_transcript_api import YouTubeTranscriptApi
 from PIL import Image
 import pytesseract  # Pour faire l'OCR
 import assemblyai as aai # Speech to text
+import validators
 
 os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE" #Erreur de librairie
 
@@ -177,7 +178,7 @@ def generate_structure_plan(docs):
         input_variables=["docs_content"],
         template=prompt_template
     )
-
+    client=st.session_state.client
     # Formater le prompt avec les documents fournis
     formatted_prompt = prompt.format(docs_content=docs)
     sujet = client.chat.completions.create(
@@ -227,7 +228,7 @@ def generate_course_sections(subject_parts, relevant_docs, sujet):
         Le développement doit être concit et clair. Limitez votre réponse à 10 phrases et à un maximum de 200 mots.
         Essaies de mettre le mieux possible  en forme le document, avec du gras de l'italique, des titres et sous titres.
         """
-        
+        client=st.session_state.client
         # Générer le contenu pour cette partie
         result = client.chat.completions.create(
             messages=[
@@ -265,6 +266,7 @@ def generate_course_sections(subject_parts, relevant_docs, sujet):
 # Fonction pour générer un fichier MP3 à partir du texte
 def text_to_mp3_Openai(text, output_path):
     # Utilisation de l'API de synthèse vocale
+    client=st.session_state.client
     response = client.audio.speech.create(
     model="tts-1",
     voice="onyx",
@@ -299,6 +301,7 @@ if st.button("Vérifier la clé API"):
         client = OpenAI(
         api_key=openai_api_key,
         )
+        st.session_state.client = client
         valid, message = test_openai_api_key(openai_api_key, client)
         if valid:
             st.session_state.api_key_valid = True
@@ -324,17 +327,17 @@ h1, h2, h3, h4, h5, h6 {
     color: black;
 }
 div.stButton > button {
-    background-color: #009622;  /* Couleur de fond */
-    color: white;               /* Couleur du texte */
-    font-weight: bold;          /* Texte en gras */
-    font-size: 20px;            /* Augmenter la taille du texte */
-    padding: 15px 30px;         /* Ajouter de l'espace à l'intérieur du bouton */
-    border-radius: 10px;        /* Coins arrondis pour un style moderne */
+    background-color: black;
+    color: white;
+    font-weight: bold; 
+    font-size: 10px;
+    padding: 10px 10px;
+    border-radius: 10px;
 }
 div.stButton > button:hover {
-    background-color: #007B33;  /* Couleur légèrement différente au survol */
-    font-size: 22px;            /* Augmenter la taille du texte au survol */
-    font-weight: bold;          /* Toujours en gras */
+    background-color: grey;
+    font-size: 22px;
+    font-weight: bold; 
 }
 div.stDownloadButton > button {
     background-color: #FF6347;
@@ -379,7 +382,31 @@ uploaded_files = st.file_uploader(
     accept_multiple_files=True
 )
 # Demander un lien YouTube si nécessaire
+if 'youtube_links' not in st.session_state:
+    st.session_state.youtube_links = []  # Initialiser la liste vide
+# Input pour les liens Youtube
 youtube_url = st.text_input("Entrer un lien YouTube pour récupérer la transcription (optionnel)")
+
+# Bouton pour ajouter le lien à la liste
+if st.button("Ajouter le lien", key="add_link"):
+    if youtube_url:
+        if validators.url(youtube_url):  # Vérifiez si l'URL est valide
+            st.session_state.youtube_links.append(youtube_url)  # Ajouter le lien à la liste
+        else:
+            st.warning("Veuillez entrer une URL YouTube valide.")
+    else:
+        st.warning("Veuillez entrer un lien valide.")  # Alerte si le champ est vide
+
+# Afficher la liste des liens YouTube
+if st.session_state.youtube_links:
+    for i, link in enumerate(st.session_state.youtube_links):
+        # Afficher chaque lien avec un bouton pour le supprimer
+        col1, col2 = st.columns([4, 1])  # Créer deux colonnes pour le lien et le bouton
+        with col1:
+            st.write(link)  # Afficher le lien
+        with col2:
+            if st.button("Supprimer", key=f"remove_{i}"):  # Bouton de suppression avec une clé unique
+                st.session_state.youtube_links.pop(i)  # Retirer le lien de la liste
 
 #################### Initialisation ############################
 # Initialisation de valeurs dans le cache
@@ -400,108 +427,109 @@ vectordb = None
 
 generer_cours=False
 
-if 'api_key_valid' in st.session_state and st.session_state.api_key_valid :
-    if st.button("Charger et traiter les fichiers") and open:
-        if uploaded_files and isinstance(uploaded_files, list) and len(uploaded_files) > 0 or youtube_url is not None:
+if st.button("Charger et traiter les fichiers"):
+    if uploaded_files and isinstance(uploaded_files, list) and len(uploaded_files) > 0 or st.session_state.youtube_links is not None and 'api_key_valid' in st.session_state and st.session_state.api_key_valid:
 
-            all_docs = []
+        all_docs = []
 
-            # Parcourir chaque fichier téléchargé
-            for uploaded_file in uploaded_files:
-                file_extension = os.path.splitext(uploaded_file.name)[1].lower()
+        # Parcourir chaque fichier téléchargé
+        for uploaded_file in uploaded_files:
+            file_extension = os.path.splitext(uploaded_file.name)[1].lower()
 
-                if file_extension == ".pdf":
-                    # Charger et splitter chaque document PDF
-                    file_path = os.path.join("temp_uploaded_file.pdf")
-                    with open(file_path, "wb") as f:
-                        f.write(uploaded_file.getbuffer())
+            if file_extension == ".pdf":
+                # Charger et splitter chaque document PDF
+                file_path = os.path.join("temp_uploaded_file.pdf")
+                with open(file_path, "wb") as f:
+                    f.write(uploaded_file.getbuffer())
 
-                    # Splitter les documents
-                    docs = load_pdf(file_path)
-                    all_docs.extend(docs)
+                # Splitter les documents
+                docs = load_pdf(file_path)
+                all_docs.extend(docs)
 
-                elif file_extension == ".txt":
-                    # Charger le fichier texte
-                    text = load_txt_file(uploaded_file)
-                    docs = [Document(page_content=text)]
-                    all_docs.extend(docs)
+            elif file_extension == ".txt":
+                # Charger le fichier texte
+                text = load_txt_file(uploaded_file)
+                docs = [Document(page_content=text)]
+                all_docs.extend(docs)
 
-                elif file_extension == ".mp3":
-                    # Transcrire le fichier audio MP3
-                    file_path = os.path.join("temp_uploaded_audio.mp3")
-                    with open(file_path, "wb") as f:
-                        f.write(uploaded_file.getbuffer())
+            elif file_extension == ".mp3":
+                # Transcrire le fichier audio MP3
+                file_path = os.path.join("temp_uploaded_audio.mp3")
+                with open(file_path, "wb") as f:
+                    f.write(uploaded_file.getbuffer())
 
-                    transcription = transcribe_audio(file_path)
-                    docs = [Document(page_content=transcription)]
-                    print(f"Voilà la TRANSCRIPTION MP3 : {docs}")
-                    all_docs.extend(docs)
+                transcription = transcribe_audio(file_path)
+                docs = [Document(page_content=transcription)]
+                print(f"Voilà la TRANSCRIPTION MP3 : {docs}")
+                all_docs.extend(docs)
 
-                elif file_extension in [".jpg", ".jpeg", ".png"]:
-                    # Charger l'image
-                    image = Image.open(uploaded_file)
-                    file_type = uploaded_file.name.split('.')[-1].upper()
-                    # Extraire le texte de l'image avec l'OCR
-                    extracted_text = extract_text_from_image(image, file_type)
+            elif file_extension in [".jpg", ".jpeg", ".png"]:
+                # Charger l'image
+                image = Image.open(uploaded_file)
+                file_type = uploaded_file.name.split('.')[-1].upper()
+                # Extraire le texte de l'image avec l'OCR
+                extracted_text = extract_text_from_image(image, file_type)
 
-                    # Ajouter le texte extrait dans les documents pour un traitement ultérieur
-                    docs = [Document(page_content=extracted_text)]
-                    all_docs.extend(docs)
-            if youtube_url:
-                st.session_state.youtube_url = youtube_url
+                # Ajouter le texte extrait dans les documents pour un traitement ultérieur
+                docs = [Document(page_content=extracted_text)]
+                all_docs.extend(docs)
+        if st.session_state.youtube_links:
+            for link in st.session_state.youtube_links:
                 try:
-                    transcription = get_youtube_transcription(youtube_url)
+                    transcription = get_youtube_transcription(link)
                     docs = [Document(page_content=transcription)]
-                    print(f"Voilà la TRANSCRIPTION YOUTUBE : {docs}")
                     all_docs.extend(docs)
                 except Exception as e:
                     st.error(f"Erreur lors de la récupération de la transcription YouTube : {e}")
 
-            # Splitter tous les documents collectés (PDF, TXT, MP3, YouTube)
-            split_docs = load_and_split_documents(all_docs)
-            # Afficher le nombre de morceaux de documents chargés
-            st.session_state.all_docs = split_docs
+        # Splitter tous les documents collectés (PDF, TXT, MP3, YouTube)
+        split_docs = load_and_split_documents(all_docs)
+        # Afficher le nombre de morceaux de documents chargés
+        st.session_state.all_docs = split_docs
 
-            # Stocker les embeddings dans Chroma
-            if split_docs:
+        # Stocker les embeddings dans Chroma
+        if split_docs:
 
-                vectordb = store_embeddings(split_docs)
-                # embeddings = vectordb.index.reconstruct_n(0, vectordb.index.ntotal)
-                # print(embeddings[:5]) 
-                if vectordb is None:
-                    st.error("Erreur lors de l'initialisation de vectordb.")
-                else:
-                    st.session_state.vectordb = vectordb
-                ### Initilisatin du modèle pour les questions/réponses
-                #Utilisation de langchain, pour un model avec historique
-                llm_name = "gpt-3.5-turbo"
-                llm = ChatOpenAI(model_name=llm_name, temperature=0.2, max_tokens=1000)
-
-                #Initialisation de la mémoire
-                memory = ConversationBufferMemory(
-                    memory_key="chat_history",
-                    return_messages=True
-                )
-
-                # Initialisation de l'historique pour le llm de question réponse.
-                retriever = vectordb.as_retriever()
-                qa = ConversationalRetrievalChain.from_llm(
-                    llm,
-                    retriever=retriever,
-                    memory=memory,
-                    chain_type="refine",  # Changez ceci selon vos besoins: 'stuff', 'map_reduce', 'refine'
-                    # return_source_documents=True
-                )
-                st.session_state.qa = qa
-
+            vectordb = store_embeddings(split_docs)
+            # embeddings = vectordb.index.reconstruct_n(0, vectordb.index.ntotal)
+            # print(embeddings[:5]) 
+            if vectordb is None:
+                st.error("Erreur lors de l'initialisation de vectordb.")
             else:
-                st.error("Aucun document valide trouvé pour le stockage.")
-        else:
-            st.error("Veuillez télécharger des fichiers.")
+                st.session_state.vectordb = vectordb
+            ### Initilisatin du modèle pour les questions/réponses
+            #Utilisation de langchain, pour un model avec historique
+            llm_name = "gpt-3.5-turbo"
+            llm = ChatOpenAI(model_name=llm_name, temperature=0.2, max_tokens=1000)
 
-        st.write(f"Nombre total de morceaux de documents chargés : {len(st.session_state.all_docs)}")
-else :
-    st.error("Votre clé OpenAI n'est pas valide")
+            #Initialisation de la mémoire
+            memory = ConversationBufferMemory(
+                memory_key="chat_history",
+                return_messages=True
+            )
+
+            # Initialisation de l'historique pour le llm de question réponse.
+            retriever = vectordb.as_retriever()
+            qa = ConversationalRetrievalChain.from_llm(
+                llm,
+                retriever=retriever,
+                memory=memory,
+                chain_type="refine",  # Changez ceci selon vos besoins: 'stuff', 'map_reduce', 'refine'
+                # return_source_documents=True
+            )
+            st.session_state.qa = qa
+
+        else:
+            st.error("Aucun document valide trouvé pour le stockage.")
+
+        st.success(f"""
+                Documents chargés avec succès, en {len(st.session_state.all_docs)} splits !
+                """)
+    else:
+        st.warning("Insérer votre clé OPENAI ainsi que vos documents")
+
+
+
 
 ################################## 
 ################################## Interface utilisateur pour poser des questions
@@ -515,7 +543,7 @@ user_question = st.text_input("Ton message ici")
 if st.button("Envoyer"):
     # Vérification des fichiers uploadés ou de l'URL YouTube
     if (uploaded_files is not None and len(uploaded_files) > 0) or \
-       ('youtube_url' in st.session_state and st.session_state['youtube_url'] is not None):
+       ('youtube_links' in st.session_state and st.session_state.youtube_links is not None):
 
         # Vérification de la question de l'utilisateur et de la base de données vectorielle
         if user_question and st.session_state['vectordb']:
@@ -536,7 +564,7 @@ if st.button("Envoyer"):
         else:
             st.error("Veuillez poser une question et vous assurer que la base de données vectorielle est chargée.")
     else:
-        st.error("Veuillez télécharger des fichiers ou entrer une URL YouTube valide.")
+        st.error("Veuillez fournir une clé OpenAI, télécharger des fichiers ou entrer une URL YouTube valide")
 
 ################################ barre latérale pour les boutons de téléchargement #################################################
 
@@ -545,7 +573,7 @@ st.sidebar.header("Téléchargement")
 ##################### Générer le cours
 if st.sidebar.button("Générer le cours"):
     if (uploaded_files is not None and len(uploaded_files) > 0) or \
-       ('youtube_url' in st.session_state and st.session_state['youtube_url'] is not None):
+       ('youtube_links' in st.session_state and st.session_state.youtube_links is not None):
         #Pour dire que le cours à déjà été générer
         generer_cours=True
         #Selection de 10 documents parmis les documents dont le 1er
@@ -596,6 +624,7 @@ if st.sidebar.button("Générer une fiche de révision"):
         Voici le plan du cours : {st.session_state.sujet}
         """
         #Interrogation LLM
+        client=st.session_state.client
         fiches = client.chat.completions.create(
             messages=[
                 {
@@ -635,13 +664,9 @@ if st.sidebar.button("Générer le podcast"):
             Voici le plan du cours à suivre : {st.session_state.sujet}
 
             Le podcast doit être structuré de façon à capter l'attention de l'auditeur dès le début, puis à expliquer chaque point de manière claire et détaillée. Utilisez un ton amical et engageant, et ponctuez la narration avec des anecdotes ou des exemples concrets pour aider à mieux comprendre les idées. Concluez par un résumé efficace des idées principales, en laissant l'auditeur avec des points mémorables à retenir.
-            
-            Structure suggérée :
-            1. Introduction : Présentation du sujet et de l’objectif du podcast.
-            2. Développement : Décrivez chaque point clé du cours en détail, avec des exemples concrets et des anecdotes.
-            3. Conclusion : Résumez les idées principales et terminez sur une note encourageante pour l'auditeur.
             """
         #Interrogation LLM
+        client=st.session_state.client
         podcast = client.chat.completions.create(
             messages=[
                 {
