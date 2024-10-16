@@ -6,6 +6,7 @@ import markdown
 import faiss
 import whisper
 import requests
+import openai
 from io import BytesIO
 from langchain.docstore.document import Document
 from PyPDF2 import PdfReader
@@ -31,19 +32,31 @@ os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE" #Erreur de librairie
 
 # 1. Chargement des API
 load_dotenv()
-openai_api_key = st.secrets["OPENAI_API_KEY"]
+# openai_api_key = st.secrets["OPENAI_API_KEY"]
 # eleven_labs_api_key=st.secrets["ELEVENLABS_API_KEY"]
 assembly_api_key=st.secrets["ASSEMBLY_API_KEY"]
-
-client = OpenAI(
-    api_key=openai_api_key,
-)
 
 
 ##################################
 ###########Fonctions##############
 ##################################
-
+# Fonction pour tester la clé API
+def test_openai_api_key(api_key, client):
+    openai.api_key = api_key
+    try:
+        # Essaie de faire un appel simple pour vérifier la clé
+        response = client.chat.completions.create(
+        messages=[
+            {
+                "role": "user",
+                "content": "Hello !",
+            }
+        ],
+        model="gpt-3.5-turbo",
+    )
+        return True, response.choices[0].message.content
+    except Exception as e:
+        return False, str(e)
 ###########################################Fonctions de loading de fichiers et split
 # Fonction pour traiter les fichiers texte
 def load_txt_file(file):
@@ -278,6 +291,26 @@ Ce projet est une application interactive qui permet aux utilisateurs de téléc
 3. **Générer** : Générer un cours, une fiche de révision, ou un podcast
 """, unsafe_allow_html=True)
 
+# Input pour la clé API
+openai_api_key = st.text_input("Entrez votre clé API OpenAI", type="password")
+
+if st.button("Vérifier la clé API"):
+    if openai_api_key:
+        client = OpenAI(
+        api_key=openai_api_key,
+        )
+        valid, message = test_openai_api_key(openai_api_key, client)
+        if valid:
+            st.session_state.api_key_valid = True
+            st.success("La clé API est valide !")
+
+        else:
+            st.session_state.api_key_valid = False
+            st.error("Erreur avec la clé API : " + message)
+    else:
+        st.warning("Veuillez entrer une clé API.")
+
+
 #Injection de CSS
 st.markdown("""
 <style>
@@ -367,106 +400,109 @@ vectordb = None
 
 generer_cours=False
 
+if 'api_key_valid' in st.session_state and st.session_state.api_key_valid :
+    if st.button("Charger et traiter les fichiers") and open:
+        if uploaded_files and isinstance(uploaded_files, list) and len(uploaded_files) > 0 or youtube_url is not None:
 
-if st.button("Charger et traiter les fichiers"):
-    if uploaded_files and isinstance(uploaded_files, list) and len(uploaded_files) > 0 or youtube_url is not None:
+            all_docs = []
 
-        all_docs = []
+            # Parcourir chaque fichier téléchargé
+            for uploaded_file in uploaded_files:
+                file_extension = os.path.splitext(uploaded_file.name)[1].lower()
 
-        # Parcourir chaque fichier téléchargé
-        for uploaded_file in uploaded_files:
-            file_extension = os.path.splitext(uploaded_file.name)[1].lower()
+                if file_extension == ".pdf":
+                    # Charger et splitter chaque document PDF
+                    file_path = os.path.join("temp_uploaded_file.pdf")
+                    with open(file_path, "wb") as f:
+                        f.write(uploaded_file.getbuffer())
 
-            if file_extension == ".pdf":
-                # Charger et splitter chaque document PDF
-                file_path = os.path.join("temp_uploaded_file.pdf")
-                with open(file_path, "wb") as f:
-                    f.write(uploaded_file.getbuffer())
+                    # Splitter les documents
+                    docs = load_pdf(file_path)
+                    all_docs.extend(docs)
 
-                # Splitter les documents
-                docs = load_pdf(file_path)
-                all_docs.extend(docs)
+                elif file_extension == ".txt":
+                    # Charger le fichier texte
+                    text = load_txt_file(uploaded_file)
+                    docs = [Document(page_content=text)]
+                    all_docs.extend(docs)
 
-            elif file_extension == ".txt":
-                # Charger le fichier texte
-                text = load_txt_file(uploaded_file)
-                docs = [Document(page_content=text)]
-                all_docs.extend(docs)
+                elif file_extension == ".mp3":
+                    # Transcrire le fichier audio MP3
+                    file_path = os.path.join("temp_uploaded_audio.mp3")
+                    with open(file_path, "wb") as f:
+                        f.write(uploaded_file.getbuffer())
 
-            elif file_extension == ".mp3":
-                # Transcrire le fichier audio MP3
-                file_path = os.path.join("temp_uploaded_audio.mp3")
-                with open(file_path, "wb") as f:
-                    f.write(uploaded_file.getbuffer())
+                    transcription = transcribe_audio(file_path)
+                    docs = [Document(page_content=transcription)]
+                    print(f"Voilà la TRANSCRIPTION MP3 : {docs}")
+                    all_docs.extend(docs)
 
-                transcription = transcribe_audio(file_path)
-                docs = [Document(page_content=transcription)]
-                print(f"Voilà la TRANSCRIPTION MP3 : {docs}")
-                all_docs.extend(docs)
+                elif file_extension in [".jpg", ".jpeg", ".png"]:
+                    # Charger l'image
+                    image = Image.open(uploaded_file)
+                    file_type = uploaded_file.name.split('.')[-1].upper()
+                    # Extraire le texte de l'image avec l'OCR
+                    extracted_text = extract_text_from_image(image, file_type)
 
-            elif file_extension in [".jpg", ".jpeg", ".png"]:
-                # Charger l'image
-                image = Image.open(uploaded_file)
-                file_type = uploaded_file.name.split('.')[-1].upper()
-                # Extraire le texte de l'image avec l'OCR
-                extracted_text = extract_text_from_image(image, file_type)
+                    # Ajouter le texte extrait dans les documents pour un traitement ultérieur
+                    docs = [Document(page_content=extracted_text)]
+                    all_docs.extend(docs)
+            if youtube_url:
+                st.session_state.youtube_url = youtube_url
+                try:
+                    transcription = get_youtube_transcription(youtube_url)
+                    docs = [Document(page_content=transcription)]
+                    print(f"Voilà la TRANSCRIPTION YOUTUBE : {docs}")
+                    all_docs.extend(docs)
+                except Exception as e:
+                    st.error(f"Erreur lors de la récupération de la transcription YouTube : {e}")
 
-                # Ajouter le texte extrait dans les documents pour un traitement ultérieur
-                docs = [Document(page_content=extracted_text)]
-                all_docs.extend(docs)
-        if youtube_url:
-            st.session_state.youtube_url = youtube_url
-            try:
-                transcription = get_youtube_transcription(youtube_url)
-                docs = [Document(page_content=transcription)]
-                print(f"Voilà la TRANSCRIPTION YOUTUBE : {docs}")
-                all_docs.extend(docs)
-            except Exception as e:
-                st.error(f"Erreur lors de la récupération de la transcription YouTube : {e}")
+            # Splitter tous les documents collectés (PDF, TXT, MP3, YouTube)
+            split_docs = load_and_split_documents(all_docs)
+            # Afficher le nombre de morceaux de documents chargés
+            st.session_state.all_docs = split_docs
 
-        # Splitter tous les documents collectés (PDF, TXT, MP3, YouTube)
-        split_docs = load_and_split_documents(all_docs)
-        # Afficher le nombre de morceaux de documents chargés
-        st.session_state.all_docs = split_docs
+            # Stocker les embeddings dans Chroma
+            if split_docs:
 
-        # Stocker les embeddings dans Chroma
-        if split_docs:
+                vectordb = store_embeddings(split_docs)
+                # embeddings = vectordb.index.reconstruct_n(0, vectordb.index.ntotal)
+                # print(embeddings[:5]) 
+                if vectordb is None:
+                    st.error("Erreur lors de l'initialisation de vectordb.")
+                else:
+                    st.session_state.vectordb = vectordb
+                ### Initilisatin du modèle pour les questions/réponses
+                #Utilisation de langchain, pour un model avec historique
+                llm_name = "gpt-3.5-turbo"
+                llm = ChatOpenAI(model_name=llm_name, temperature=0.2, max_tokens=1000)
 
-            vectordb = store_embeddings(split_docs)
-            # embeddings = vectordb.index.reconstruct_n(0, vectordb.index.ntotal)
-            # print(embeddings[:5]) 
-            if vectordb is None:
-                st.error("Erreur lors de l'initialisation de vectordb.")
+                #Initialisation de la mémoire
+                memory = ConversationBufferMemory(
+                    memory_key="chat_history",
+                    return_messages=True
+                )
+
+                # Initialisation de l'historique pour le llm de question réponse.
+                retriever = vectordb.as_retriever()
+                qa = ConversationalRetrievalChain.from_llm(
+                    llm,
+                    retriever=retriever,
+                    memory=memory,
+                    chain_type="refine",  # Changez ceci selon vos besoins: 'stuff', 'map_reduce', 'refine'
+                    # return_source_documents=True
+                )
+                st.session_state.qa = qa
+
             else:
-                st.session_state.vectordb = vectordb
-            ### Initilisatin du modèle pour les questions/réponses
-            #Utilisation de langchain, pour un model avec historique
-            llm_name = "gpt-3.5-turbo"
-            llm = ChatOpenAI(model_name=llm_name, temperature=0.2, max_tokens=1000)
-
-            #Initialisation de la mémoire
-            memory = ConversationBufferMemory(
-                memory_key="chat_history",
-                return_messages=True
-            )
-
-            # Initialisation de l'historique pour le llm de question réponse.
-            retriever = vectordb.as_retriever()
-            qa = ConversationalRetrievalChain.from_llm(
-                llm,
-                retriever=retriever,
-                memory=memory,
-                chain_type="refine",  # Changez ceci selon vos besoins: 'stuff', 'map_reduce', 'refine'
-                # return_source_documents=True
-            )
-            st.session_state.qa = qa
-
+                st.error("Aucun document valide trouvé pour le stockage.")
         else:
-            st.error("Aucun document valide trouvé pour le stockage.")
-    else:
-        st.error("Veuillez télécharger des fichiers.")
+            st.error("Veuillez télécharger des fichiers.")
 
-    st.write(f"Nombre total de morceaux de documents chargés : {len(st.session_state.all_docs)}")
+        st.write(f"Nombre total de morceaux de documents chargés : {len(st.session_state.all_docs)}")
+else :
+    st.error("Votre clé OpenAI n'est pas valide")
+
 ################################## 
 ################################## Interface utilisateur pour poser des questions
 
