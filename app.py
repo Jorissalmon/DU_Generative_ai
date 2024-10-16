@@ -284,13 +284,13 @@ st.set_page_config(layout="wide")
 st.markdown("""
 # Projet d'un Assistant de Synthèse
 
-Ce projet est une application interactive qui permet aux utilisateurs de télécharger plusieurs types de fichiers (PDF, TXT, MP3, Images, vidéos YouTube) et d'extraire du texte ou des informations utiles à partir de ceux-ci.
+Ce projet est une application interactive qui permet aux utilisateurs de télécharger plusieurs types de fichiers (PDF, TXT, MP3, Images, vidéos YouTube) et de pouvoir utiliser un LLM à partir de ceux-ci.
 
 ## Comment utiliser l'application :
 
 
 1. **Insérer ta clé API OPENAI** : que tu peux retrouver [ici](https://platform.openai.com/api-keys).
-2. **Téléchargez un fichier** : Utilisez l'outil de téléchargement pour importer des fichiers de type PDF, TXT, MP3, images ou entrez l'URL d'une vidéo YouTube pour en extraire la transcription.
+2. **Télécharger un fichier** : Utilisez l'outil de téléchargement pour importer des fichiers de type PDF, TXT, MP3, images ou entrez l'URL d'une vidéo YouTube pour en extraire la transcription.
 3. **Posez vos questions** :  Vous pouvez poser vos questions sur le cours
 4. **Générer** : Générer un cours, une fiche de révision, ou un podcast
 """, unsafe_allow_html=True)
