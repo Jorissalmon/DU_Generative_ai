@@ -87,24 +87,36 @@ def load_pdf(file_path):
 def extract_text_from_image(image,file_type):
     url = 'https://api.ocr.space/parse/image'
     api_key_OCR = st.secrets['OCR_SPACE_API_KEY']
+    try:
+        if file_type == 'JPG':
+            file_type = 'JPEG'
+        # Vérifier si le format est supporté
+        if file_type not in ['JPEG', 'PNG', 'JPG']:
+            raise ValueError(f"Format de fichier non supporté : {file_type}")
 
-    img_byte_arr = BytesIO()
-    image.save(img_byte_arr, format=file_type)
-    img_byte_arr = img_byte_arr.getvalue()
-    
-    # Envoyer la requête POST à l'API OCR
-    response = requests.post(
-        url,
-        files={'filename': img_byte_arr},
-        data={
-            'apikey': api_key_OCR,
-            'filetype': file_type.lower()
-        }
-    )
-    
-    result = response.json()
-    # st.json(result) Voir les résulats en JSON
-    return result['ParsedResults'][0]['ParsedText']
+        img_byte_arr = BytesIO()
+        image.save(img_byte_arr, format=file_type)
+        img_byte_arr = img_byte_arr.getvalue()
+
+        
+        # Envoyer la requête POST à l'API OCR
+        response = requests.post(
+            url,
+            files={'filename': ('image.' + file_type.lower(), img_byte_arr, f'image/{file_type.lower()}')},
+            data={
+                'apikey': api_key_OCR,
+                'language': 'fre',
+                'isOverlayRequired': False
+            }
+        )
+        result = response.json()
+        # st.json(result) Voir les résulats en JSON
+        return result['ParsedResults'][0]['ParsedText']
+    except KeyError as e:
+        raise ValueError(f"Erreur de format du fichier : {e}")
+    except Exception as e:
+        raise ValueError(f"Erreur lors de l'extraction du texte : {e}")
+
 
 # Fonction pour splitter les documents
 def load_and_split_documents(documents, chunk_size=100, chunk_overlap=10):
