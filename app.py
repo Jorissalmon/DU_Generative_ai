@@ -1,6 +1,7 @@
 import streamlit as st 
 import random
 import os
+import tempfile
 import markdown2
 import markdown
 import faiss
@@ -20,6 +21,9 @@ from langchain.text_splitter import TokenTextSplitter
 from langchain.embeddings.openai import OpenAIEmbeddings
 from langchain.document_loaders import PyPDFLoader
 from langchain.prompts import PromptTemplate
+from langchain.document_loaders.generic import GenericLoader
+from langchain.document_loaders.parsers import OpenAIWhisperParser
+from langchain.document_loaders.blob_loaders.youtube_audio import YoutubeAudioLoader
 from fpdf import FPDF
 from openai import OpenAI
 from langchain.vectorstores import FAISS
@@ -28,6 +32,7 @@ from PIL import Image
 import pytesseract  # Pour faire l'OCR
 import assemblyai as aai # Speech to text
 import validators
+# import yt_dlp
 
 os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE" #Erreur de librairie
 
@@ -73,9 +78,27 @@ def transcribe_audio(file_path):
 
 # Fonction pour récupérer la transcription d'une vidéo YouTube
 def get_youtube_transcription(youtube_url):
-    video_id = youtube_url.split("v=")[-1]  # Extraire l'ID de la vidéo à partir de l'URL
-    transcript = YouTubeTranscriptApi.get_transcript(video_id)
-    return " ".join([t['text'] for t in transcript])
+    try:
+        # Spécifier un répertoire pour enregistrer l'audio
+        save_dir = './youtube_audio'
+
+        # Créer le loader
+        loader = GenericLoader(
+            YoutubeAudioLoader([youtube_url], save_dir),
+            OpenAIWhisperParser()
+        )
+
+        # Charger les documents (audio et leurs transcriptions)
+        docs = loader.load()
+
+        # Récupérer le texte transcrit à partir des documents
+        transcription = " ".join(doc.page_content for doc in docs)
+
+        return transcription
+
+    except Exception as e:
+        raise ValueError(f"Erreur lors de la récupération de la transcription YouTube : {e}")
+
 
 # Fonction pour charger les pdfs
 def load_pdf(file_path):
