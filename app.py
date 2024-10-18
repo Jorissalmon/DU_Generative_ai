@@ -85,22 +85,16 @@ def get_youtube_transcription(youtube_url):
     # Définir les options pour yt-dlp
     options = {
         'format': 'bestaudio/best',  # Télécharge le meilleur format audio
-        'extractaudio': True,  # Extraire l'audio
         'outtmpl': os.path.join(save_dir, '%(title)s.%(ext)s'),  # Modèle de nom de fichier
-        'postprocessors': [{  # Ajoute un post-traitement pour convertir en MP3
-            'key': 'FFmpegExtractAudio',
-            'preferredcodec': 'mp3',
-            'preferredquality': '192',  # Qualité audio souhaitée
-        }],
     }
 
     # Télécharger l'audio
     with yt_dlp.YoutubeDL(options) as ydl:
         ydl.download([youtube_url])
 
-    # Trouver le fichier audio téléchargé
+    # Trouver le fichier audio téléchargé (peut être .webm ou .m4a)
     downloaded_files = os.listdir(save_dir)
-    audio_file = next((f for f in downloaded_files if f.endswith('.mp3')), None)
+    audio_file = next((f for f in downloaded_files if f.endswith(('.webm', '.m4a', 'mp3'))), None)
 
     if audio_file is None:
         raise ValueError("Aucun fichier audio MP3 trouvé après le téléchargement.")
