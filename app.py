@@ -139,6 +139,8 @@ def get_relevant_docs_cours(vectordb, query, len_k):
     if len_k*0.2>1 :
         k=len_k*0.2 
     else : k=1
+    if k>=80:
+        k=80
     docs = vectordb.max_marginal_relevance_search(query, k=k, fetch_k=len_k, lambda_mult=0.7)
     docs_content = "\n\n".join([doc.page_content for doc in docs])
     print(docs_content)
@@ -148,8 +150,10 @@ def get_relevant_docs_cours(vectordb, query, len_k):
 # @st.cache_data(show_spinner=False)
 def get_relevant_docs_chat(_vectordb, query, len_k):
     if len_k*0.2>1 :
-        k=len_k*0.2 
+        k=len_k*0.2
     else : k=1
+    if k>=80:
+        k=80
     docs = _vectordb.max_marginal_relevance_search(query, k=k, fetch_k=len_k, lambda_mult=0.3)
     docs_content = "\n\n".join([doc.page_content for doc in docs])
     print(docs_content)
