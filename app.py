@@ -74,7 +74,7 @@ def transcribe_audio(file_path):
 # Fonction pour récupérer la transcription d'une vidéo YouTube
 def get_youtube_transcription(youtube_url):
     video_id = youtube_url.split("v=")[-1]  # Extraire l'ID de la vidéo à partir de l'URL
-    transcript = YouTubeTranscriptApi.get_transcript(video_id, languages=['fr', 'en'])
+    transcript = YouTubeTranscriptApi.get_transcript(video_id)
     return " ".join([t['text'] for t in transcript])
 
 # Fonction pour charger les pdfs
