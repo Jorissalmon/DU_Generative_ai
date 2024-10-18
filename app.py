@@ -67,50 +67,53 @@ def load_txt_file(file):
 
 # Fonction pour récupérer la transcription d'un fichier MP3
 def transcribe_audio(file_path):
-    aai.settings.api_key = assembly_api_key
-    transcriber = aai.Transcriber()
-    transcript = transcriber.transcribe(file_path)
-    # st.write(transcript.text) Regarder la transcription
-    return transcript.text
+    # Ouvrir le fichier audio avec un gestionnaire de contexte
+    with open(file_path, "rb") as audio_file:
+        client = st.session_state.client
+        response = client.audio.transcriptions.create(
+            model="whisper-1", 
+            file=audio_file
+        )
+    return response.text
 
 # Fonction pour récupérer la transcription d'une vidéo YouTube
 def get_youtube_transcription(youtube_url):
-    try:
-        # Spécifier un répertoire pour enregistrer l'audio
-        save_dir = './youtube_audio'
+            # Spécifier un répertoire pour enregistrer l'audio
+    save_dir = './youtube_audio'
+    os.makedirs(save_dir, exist_ok=True)  # Assurer que le répertoire existe
 
-        # Définir les options pour yt-dlp
-        options = {
-            'format': 'bestaudio/best',  # Télécharge le meilleur format audio
-            'extractaudio': True,  # Extraire l'audio
-            'outtmpl': os.path.join(save_dir, '%(title)s.%(ext)s'),  # Modèle de nom de fichier
-            'postprocessors': [{  # Ajoute un post-traitement pour convertir en MP3
-                'key': 'FFmpegExtractAudio',
-                'preferredcodec': 'mp3',
-                'preferredquality': '192',  # Qualité audio souhaitée
-            }],
-        }
+    # Définir les options pour yt-dlp
+    options = {
+        'format': 'bestaudio/best',  # Télécharge le meilleur format audio
+        'extractaudio': True,  # Extraire l'audio
+        'outtmpl': os.path.join(save_dir, '%(title)s.%(ext)s'),  # Modèle de nom de fichier
+        'postprocessors': [{  # Ajoute un post-traitement pour convertir en MP3
+            'key': 'FFmpegExtractAudio',
+            'preferredcodec': 'mp3',
+            'preferredquality': '192',  # Qualité audio souhaitée
+        }],
+    }
 
-        # Télécharger l'audio
-        with yt_dlp.YoutubeDL(options) as ydl:
-            ydl.download([youtube_url])
+    # Télécharger l'audio
+    with yt_dlp.YoutubeDL(options) as ydl:
+        ydl.download([youtube_url])
 
-        # Trouver le fichier audio téléchargé
-        downloaded_files = os.listdir(save_dir)
-        audio_file = next((f for f in downloaded_files if f.endswith('.mp3')), None)
+    # Trouver le fichier audio téléchargé
+    downloaded_files = os.listdir(save_dir)
+    audio_file = next((f for f in downloaded_files if f.endswith('.mp3')), None)
 
-        if audio_file is None:
-            raise ValueError("Aucun fichier audio MP3 trouvé après le téléchargement.")
+    if audio_file is None:
+        raise ValueError("Aucun fichier audio MP3 trouvé après le téléchargement.")
 
-        # Transcrire l'audio
-        file_path = os.path.join(save_dir, audio_file)
-        transcription = transcribe_audio(file_path)
-        os.remove(file_path)
-        return transcription
+    # Transcrire l'audio
+    file_path = os.path.join(save_dir, audio_file)
+    transcription = transcribe_audio(file_path)
+    # st.write(transcription)
 
-    except Exception as e:
-        raise ValueError(f"Erreur lors de la récupération de la transcription YouTube : {e}")
+    # Supprimer le fichier audio après la transcription
+    os.remove(file_path)
 
+    return transcription
 
 # Fonction pour charger les pdfs
 def load_pdf(file_path):
